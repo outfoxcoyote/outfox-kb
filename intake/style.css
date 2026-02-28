@@ -8,6 +8,9 @@
   padding: 0;
 }
 
+/* Prevent display:flex/grid rules from overriding the [hidden] attribute */
+[hidden] { display: none !important; }
+
 :root {
   --color-bg:          #f4f4f2;
   --color-surface:     #ffffff;
