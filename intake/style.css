@@ -337,6 +337,9 @@ textarea:disabled {
   line-height: 1;
   transition: background 0.1s, color 0.1s;
   flex-shrink: 0;
+  /* Must sit above the invisible file input overlay (z-index: 1) */
+  position: relative;
+  z-index: 2;
 }
 
 .remove-file:hover {

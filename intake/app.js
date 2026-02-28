@@ -191,7 +191,10 @@ function clearFileState() {
 }
 
 // Remove file button
-removeFileBtn.addEventListener('click', () => {
+removeFileBtn.addEventListener('click', (e) => {
+  // Stop the click bubbling up to the invisible file input overlay
+  e.stopPropagation();
+  e.preventDefault();
   clearFileState();
 });
 
