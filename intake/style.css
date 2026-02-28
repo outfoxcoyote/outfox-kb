@@ -438,6 +438,95 @@ textarea:disabled {
   transform: none;
 }
 
+/* ── Secondary Button ───────────────────────────────────────── */
+
+.btn-secondary {
+  background: none;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 11px 24px;
+  font-family: var(--font);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-secondary:hover {
+  background: var(--color-bg);
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
+}
+
+/* ── Loading State ───────────────────────────────────────────── */
+
+.btn-primary.loading {
+  opacity: 0.8;
+  cursor: wait;
+  pointer-events: none;
+}
+
+.btn-primary.loading::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  margin-left: 10px;
+  vertical-align: middle;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Preview Section ─────────────────────────────────────────── */
+
+.preview-section {
+  border-color: var(--color-border-focus);
+}
+
+.preview-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--color-mode-sel);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.preview-textarea {
+  width: 100%;
+  min-height: 280px;
+  padding: 14px;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  resize: vertical;
+  cursor: default;
+}
+
+.preview-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 
 @media (max-width: 540px) {

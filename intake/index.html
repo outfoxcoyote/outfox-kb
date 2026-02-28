@@ -149,9 +149,26 @@
         </div>
 
       </form>
+
+      <!-- ── Distilled Preview (shown after Claude processes the document) ── -->
+      <section id="preview-section" class="form-section preview-section" hidden>
+        <h2 class="section-heading">
+          Distilled Preview
+          <span class="preview-badge" id="preview-badge"></span>
+        </h2>
+        <p class="section-hint" id="preview-hint"></p>
+        <textarea id="preview-text" class="preview-textarea" readonly rows="16"></textarea>
+        <div class="preview-actions">
+          <button type="button" class="btn-secondary" id="back-btn">← Edit</button>
+          <button type="button" class="btn-primary" id="download-btn">Download for Ingestion</button>
+        </div>
+      </section>
+
     </div>
   </main>
 
+  <!-- config.js is gitignored — copy config.example.js and fill in your key -->
+  <script src="config.js"></script>
   <script src="app.js"></script>
 
 </body>

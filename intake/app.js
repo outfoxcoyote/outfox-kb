@@ -1,51 +1,74 @@
 /* ─────────────────────────────────────────────────────────────
-   Outfox Knowledge Base — Intake Form Logic (Phase 1)
+   Outfox Knowledge Base — Intake Form Logic (Phase 2)
    Responsibilities:
      - Form validation (title required, content required)
      - File type and size validation
      - FileReader: .txt/.md → plain text, .pdf → base64
      - Mutual exclusion: textarea vs. file upload
      - Distill toggle state tracking
-     - JSON handoff download (wired up but Claude call is Phase 2)
+     - Phase 2: Claude API distillation call (Path A)
+     - Phase 2: Direct-to-download (Path B)
+     - Phase 2: Distilled preview + Download for Ingestion
    ───────────────────────────────────────────────────────────── */
 
 'use strict';
 
+// ── Distillation Prompt ───────────────────────────────────────
+// Approved prompt — do not modify without explicit sign-off (see CLAUDE.md)
+
+const DISTILLATION_PROMPT = `You are a knowledge management assistant for Outfox Consulting. \
+Your task is to transform raw document input into a clean, well-structured document suitable \
+for storage in a knowledge base.
+
+Given the raw content, produce a restructured version that:
+- Preserves all factual information, names, dates, decisions, and insights — do not omit or invent anything
+- Organises the content with clear headings and logical sections
+- Removes filler, repetition, and transcription artefacts (e.g. "um", "you know", crosstalk)
+- Writes in clear, professional prose appropriate for a consulting knowledge base
+- Does not add commentary, opinions, or information not present in the source
+
+Return only the cleaned document. No preamble, no explanation, no metadata.`;
+
 // ── Constants ─────────────────────────────────────────────────
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_BYTES     = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_EXTENSIONS = ['.txt', '.md', '.pdf'];
+const CLAUDE_MODEL       = 'claude-sonnet-4-6';
+const CLAUDE_API_URL     = 'https://api.anthropic.com/v1/messages';
 
 // ── State ─────────────────────────────────────────────────────
 
 const state = {
-  fileData: null,      // { name, type, text|b64, isPdf }
-  isDistill: true,     // mirrors the radio button selection
+  fileData:       null,   // { name, type, text|b64, isPdf }
+  isDistill:      true,   // mirrors the radio button selection
+  distilledText:  null,   // Claude's output after distillation
 };
 
 // ── DOM References ────────────────────────────────────────────
 
-const form          = document.getElementById('intake-form');
-const titleInput    = document.getElementById('title');
-const contentArea   = document.getElementById('content-text');
-const charCount     = document.getElementById('char-count');
-const fileInput     = document.getElementById('file-upload');
-const uploadZone    = document.getElementById('upload-zone');
-const uploadPrompt  = document.getElementById('upload-prompt');
-const fileStatus    = document.getElementById('file-status');
-const fileStatusTxt = document.getElementById('file-status-text');
-const removeFileBtn = document.getElementById('remove-file');
-const modeRadios    = document.querySelectorAll('input[name="processing_mode"]');
-const submitBtn     = document.getElementById('submit-btn');
+const form           = document.getElementById('intake-form');
+const titleInput     = document.getElementById('title');
+const contentArea    = document.getElementById('content-text');
+const charCount      = document.getElementById('char-count');
+const fileInput      = document.getElementById('file-upload');
+const uploadZone     = document.getElementById('upload-zone');
+const uploadPrompt   = document.getElementById('upload-prompt');
+const fileStatus     = document.getElementById('file-status');
+const fileStatusTxt  = document.getElementById('file-status-text');
+const removeFileBtn  = document.getElementById('remove-file');
+const modeRadios     = document.querySelectorAll('input[name="processing_mode"]');
+const submitBtn      = document.getElementById('submit-btn');
+
+// Preview section
+const previewSection = document.getElementById('preview-section');
+const previewBadge   = document.getElementById('preview-badge');
+const previewHint    = document.getElementById('preview-hint');
+const previewText    = document.getElementById('preview-text');
+const backBtn        = document.getElementById('back-btn');
+const downloadBtn    = document.getElementById('download-btn');
 
 // ── Error Helpers ─────────────────────────────────────────────
 
-/**
- * Show an inline error message beneath a field.
- * @param {string} fieldId  - The wrapping .field element id
- * @param {string} errorId  - The .field-error span id
- * @param {string} message  - Error text to display
- */
 function showError(fieldId, errorId, message) {
   const field = document.getElementById(fieldId);
   const error = document.getElementById(errorId);
@@ -53,9 +76,6 @@ function showError(fieldId, errorId, message) {
   if (error) error.textContent = message;
 }
 
-/**
- * Clear an inline error message.
- */
 function clearError(fieldId, errorId) {
   const field = document.getElementById(fieldId);
   const error = document.getElementById(errorId);
@@ -75,7 +95,7 @@ contentArea.addEventListener('input', () => {
   const len = contentArea.value.length;
   charCount.textContent = len > 0 ? `${len.toLocaleString()} characters` : '';
 
-  // If user is typing in textarea, release any loaded file
+  // If user types in textarea, release any loaded file
   if (len > 0 && state.fileData) {
     clearFileState();
   }
@@ -85,11 +105,6 @@ contentArea.addEventListener('input', () => {
 
 // ── File Upload Handling ──────────────────────────────────────
 
-/**
- * Validate extension and size, then read the file.
- * .txt and .md are read as plain text.
- * .pdf is read as ArrayBuffer and converted to base64 (Python extracts text).
- */
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   if (!file) return;
@@ -121,9 +136,6 @@ fileInput.addEventListener('change', () => {
   }
 });
 
-/**
- * Read a .txt or .md file as plain text.
- */
 function readFileAsText(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
@@ -139,19 +151,26 @@ function readFileAsText(file) {
 }
 
 /**
- * Read a .pdf file as ArrayBuffer and convert to base64.
- * Text extraction is handled later by the Python script via pypdf.
+ * Read a .pdf file as base64. Text extraction is handled by the Python
+ * script via pypdf — the browser cannot extract PDF text without a library.
+ * PDFs must use "Direct" mode since there is no text to pass to Claude.
  */
 function readFileAsBase64(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
-    // Convert ArrayBuffer → base64 string
     const bytes  = new Uint8Array(e.target.result);
     const binary = bytes.reduce((acc, b) => acc + String.fromCharCode(b), '');
     const b64    = btoa(binary);
     state.fileData = { name: file.name, isPdf: true, b64 };
-    setFileLoaded(file.name, `PDF — ${(file.size / 1024).toFixed(0)} KB`);
+    setFileLoaded(file.name, `PDF — ${(file.size / 1024).toFixed(0)} KB · Direct mode only`);
     disableTextarea();
+
+    // PDFs cannot be distilled in the browser — switch to Direct automatically
+    const directRadio = document.querySelector('input[value="direct"]');
+    if (directRadio) {
+      directRadio.checked = true;
+      state.isDistill = false;
+    }
   };
   reader.onerror = () => {
     showError('field-upload', 'error-file', 'Could not read PDF. Please try again.');
@@ -159,46 +178,35 @@ function readFileAsBase64(file) {
   reader.readAsArrayBuffer(file);
 }
 
-/**
- * Show the file loaded state in the upload zone.
- */
 function setFileLoaded(name, detail) {
   uploadPrompt.hidden = true;
   fileStatus.hidden   = false;
   fileStatusTxt.textContent = `${name} — ${detail}`;
 }
 
-/**
- * Disable textarea and update its visual state.
- */
 function disableTextarea() {
-  contentArea.disabled    = true;
-  contentArea.value       = '';
-  charCount.textContent   = '';
+  contentArea.disabled  = true;
+  contentArea.value     = '';
+  charCount.textContent = '';
 }
 
-/**
- * Reset all file state and re-enable textarea.
- */
 function clearFileState() {
-  state.fileData          = null;
-  fileInput.value         = '';
-  uploadPrompt.hidden     = false;
-  fileStatus.hidden       = true;
+  state.fileData        = null;
+  fileInput.value       = '';
+  uploadPrompt.hidden   = false;
+  fileStatus.hidden     = true;
   fileStatusTxt.textContent = '';
-  contentArea.disabled    = false;
+  contentArea.disabled  = false;
   clearError('field-upload', 'error-file');
 }
 
-// Remove file button
 removeFileBtn.addEventListener('click', (e) => {
-  // Stop the click bubbling up to the invisible file input overlay
   e.stopPropagation();
   e.preventDefault();
   clearFileState();
 });
 
-// ── Drag and Drop on Upload Zone ──────────────────────────────
+// ── Drag and Drop ─────────────────────────────────────────────
 
 uploadZone.addEventListener('dragover', (e) => {
   e.preventDefault();
@@ -214,8 +222,6 @@ uploadZone.addEventListener('drop', (e) => {
   uploadZone.classList.remove('drag-over');
   const file = e.dataTransfer.files[0];
   if (!file) return;
-  // Simulate a file input change by assigning to the input (not possible directly)
-  // Instead, create a synthetic DataTransfer and assign
   const dt = new DataTransfer();
   dt.items.add(file);
   fileInput.files = dt.files;
@@ -232,21 +238,15 @@ modeRadios.forEach((radio) => {
 
 // ── Form Validation ───────────────────────────────────────────
 
-/**
- * Validate all required fields.
- * Returns true if valid, false if any errors are set.
- */
 function validate() {
   let valid = true;
   clearAllErrors();
 
-  // Title is required
   if (!titleInput.value.trim()) {
     showError('field-title', 'error-title', 'Document title is required.');
     valid = false;
   }
 
-  // Content: either textarea or a loaded file must be present
   const hasText = contentArea.value.trim().length > 0;
   const hasFile = state.fileData !== null;
 
@@ -262,23 +262,22 @@ function validate() {
 // ── Handoff JSON Builder ──────────────────────────────────────
 
 /**
- * Assemble the handoff payload that will be passed to the Python
- * ingestion script. In Phase 1 this is built but not yet used —
- * the download is triggered in Phase 2 after optional distillation.
+ * Build the payload object that the Python script will consume.
+ * @param {string|null} distilledContent - Claude's output, or null for direct path
  */
 function buildHandoffPayload(distilledContent = null) {
   const payload = {
-    title:       titleInput.value.trim(),
-    category:    document.getElementById('category').value   || null,
-    subcategory: document.getElementById('subcategory').value.trim() || null,
-    industry:    document.getElementById('industry').value.trim()    || null,
-    doc_type:    document.getElementById('doc_type').value   || null,
-    source:      document.getElementById('source').value.trim()      || null,
+    title:        titleInput.value.trim(),
+    category:     document.getElementById('category').value         || null,
+    subcategory:  document.getElementById('subcategory').value.trim() || null,
+    industry:     document.getElementById('industry').value.trim()    || null,
+    doc_type:     document.getElementById('doc_type').value          || null,
+    source:       document.getElementById('source').value.trim()     || null,
     is_distilled: state.isDistill && distilledContent !== null,
   };
 
   if (state.fileData?.isPdf) {
-    // PDF: include raw base64 — Python script extracts text via pypdf
+    // PDF: Python extracts text via pypdf
     payload.content = null;
     payload.pdf_b64 = state.fileData.b64;
   } else if (distilledContent !== null) {
@@ -286,7 +285,7 @@ function buildHandoffPayload(distilledContent = null) {
     payload.content = distilledContent;
     payload.pdf_b64 = null;
   } else {
-    // Direct path (text or loaded txt/md file)
+    // Direct path: raw text or loaded .txt/.md content
     payload.content = state.fileData?.text ?? contentArea.value.trim();
     payload.pdf_b64 = null;
   }
@@ -296,13 +295,11 @@ function buildHandoffPayload(distilledContent = null) {
 
 /**
  * Trigger a JSON file download in the browser.
- * @param {object} payload  - The handoff object
- * @param {string} title    - Used to generate the filename
  */
-function downloadHandoff(payload, title) {
-  const slug      = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  const timestamp = new Date().toISOString().slice(0, 10);
-  const filename  = `outfox-ingest-${slug}-${timestamp}.json`;
+function downloadHandoff(payload) {
+  const slug     = payload.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  const date     = new Date().toISOString().slice(0, 10);
+  const filename = `outfox-ingest-${slug}-${date}.json`;
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
@@ -315,38 +312,141 @@ function downloadHandoff(payload, title) {
   URL.revokeObjectURL(url);
 }
 
+// ── Claude API — Distillation ─────────────────────────────────
+
+/**
+ * Call the Claude API with the raw document text.
+ * Returns the distilled string, or throws on failure.
+ */
+async function callClaude(rawContent) {
+  const response = await fetch(CLAUDE_API_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key':         CONFIG.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type':      'application/json',
+      // Required for browser-based requests to the Anthropic API
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model:      CLAUDE_MODEL,
+      max_tokens: 4096,
+      system:     DISTILLATION_PROMPT,
+      messages: [
+        { role: 'user', content: rawContent }
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 429) {
+      throw new Error('rate_limit');
+    }
+    throw new Error(`api_error:${response.status}:${body?.error?.message ?? 'Unknown error'}`);
+  }
+
+  const data = await response.json();
+  return data.content[0].text;
+}
+
+// ── Submit Button Loading State ───────────────────────────────
+
+function setLoading(isLoading) {
+  submitBtn.disabled = isLoading;
+  if (isLoading) {
+    submitBtn.classList.add('loading');
+    submitBtn.textContent = 'Distilling';
+  } else {
+    submitBtn.classList.remove('loading');
+    submitBtn.textContent = 'Process Document';
+  }
+}
+
+// ── Preview Section ───────────────────────────────────────────
+
+/**
+ * Show the preview section with the given content.
+ * @param {string} content   - Text to display
+ * @param {boolean} isDistilled - True if this came from Claude
+ */
+function showPreview(content, isDistilled) {
+  state.distilledText = isDistilled ? content : null;
+
+  previewText.value    = content;
+  previewBadge.textContent = isDistilled ? 'Distilled by Claude' : 'Direct — as submitted';
+  previewHint.textContent  = isDistilled
+    ? 'Review Claude\'s output. When satisfied, click Download to generate the ingestion file.'
+    : 'Content will be chunked and embedded as-is. Click Download to generate the ingestion file.';
+
+  form.hidden           = true;
+  previewSection.hidden = false;
+  previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Back button — restore the form
+backBtn.addEventListener('click', () => {
+  previewSection.hidden = true;
+  form.hidden           = false;
+  state.distilledText   = null;
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+// Download button — build payload and trigger download
+downloadBtn.addEventListener('click', () => {
+  const payload = buildHandoffPayload(state.distilledText);
+  downloadHandoff(payload);
+
+  // Brief feedback on the button
+  downloadBtn.textContent = 'Downloaded ✓';
+  downloadBtn.disabled    = true;
+  setTimeout(() => {
+    downloadBtn.textContent = 'Download for Ingestion';
+    downloadBtn.disabled    = false;
+  }, 3000);
+});
+
 // ── Form Submit ───────────────────────────────────────────────
 
-form.addEventListener('submit', (e) => {
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   if (!validate()) {
-    // Scroll first error into view
     const firstError = form.querySelector('.has-error');
     if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
-  /*
-   * Phase 1 ends here — validation and file reading are complete.
-   *
-   * Phase 2 will extend this handler:
-   *   - If state.isDistill: call Claude API with raw content,
-   *     display distilled preview, then trigger download.
-   *   - If !state.isDistill: call downloadHandoff() directly.
-   *
-   * For now, log the assembled payload to the console so the
-   * Phase 1 gate can be verified.
-   */
-  const payload = buildHandoffPayload();
-  console.log('[Outfox KB] Handoff payload ready:', payload);
-  console.log('[Outfox KB] Processing mode:', state.isDistill ? 'Distill First' : 'Direct');
+  // ── Path B: Direct ───────────────────────────────────────────
+  // PDFs always go direct (no browser-side text extraction).
+  // Text/md files go direct when toggle is set to Direct.
+  if (!state.isDistill || state.fileData?.isPdf) {
+    const content = state.fileData?.text ?? contentArea.value.trim();
+    showPreview(content, false);
+    return;
+  }
 
-  // Temporary Phase 1 feedback — will be replaced by Phase 2 UI
-  submitBtn.textContent = 'Ready — Phase 2 will trigger download';
-  submitBtn.disabled = true;
-  setTimeout(() => {
-    submitBtn.textContent = 'Process Document';
-    submitBtn.disabled = false;
-  }, 3000);
+  // ── Path A: Distill First ────────────────────────────────────
+  const rawContent = state.fileData?.text ?? contentArea.value.trim();
+
+  setLoading(true);
+  try {
+    const distilled = await callClaude(rawContent);
+    showPreview(distilled, true);
+  } catch (err) {
+    if (err.message === 'rate_limit') {
+      showError('field-content', 'error-content',
+        'Claude API rate limit reached. Please wait a moment and try again.');
+    } else {
+      const detail = err.message.startsWith('api_error:')
+        ? err.message.split(':').slice(2).join(':')
+        : err.message;
+      showError('field-content', 'error-content',
+        `Claude API error: ${detail}. Please try again.`);
+    }
+    const firstError = form.querySelector('.has-error');
+    if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } finally {
+    setLoading(false);
+  }
 });
