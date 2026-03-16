@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .DS_Store
 node_modules/
+desktop.ini
+
+# Handoff JSON files — intermediate build artifacts, may contain full document text
+pipeline/content/

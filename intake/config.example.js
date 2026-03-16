@@ -1,12 +1,13 @@
-// ─────────────────────────────────────────────────────────────
-// Outfox KB — Intake App Configuration Template
+// config.example.js — Intake form API key template
 //
-// SETUP: Copy this file to config.js and fill in your key.
-//   cp config.example.js config.js
+// SETUP:
+//   1. Copy this file to config.js (same directory)
+//   2. Replace the placeholder with your real Anthropic API key
+//   3. config.js is gitignored — never commit it
 //
-// config.js is gitignored and must never be committed.
-// ─────────────────────────────────────────────────────────────
+// The intake form only needs ANTHROPIC_API_KEY.
+// (OpenAI and Supabase keys are used by the chat interface, not intake.)
 
 const CONFIG = {
-  ANTHROPIC_API_KEY: 'your-anthropic-api-key-here',
+  ANTHROPIC_API_KEY: 'sk-ant-api03-...',
 };

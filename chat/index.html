@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Outfox KB — Query</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-mark">⬡</span>
+        <span class="logo-name">Outfox KB</span>
+      </div>
+      <span class="header-sub">Knowledge Base Query</span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Query input ── -->
+    <section class="card query-card">
+      <label class="query-label" for="question">Ask the Outfox KB anything</label>
+      <div class="query-row">
+        <input
+          type="text"
+          id="question"
+          placeholder="e.g. What is the recommended chunking strategy?"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        >
+        <button id="ask_btn" class="btn-primary">Ask</button>
+      </div>
+      <p class="query-hint">Press Enter or click Ask — answers are grounded in KB content only</p>
+      <span id="query_status" class="status-msg"></span>
+    </section>
+
+    <!-- ── No-results message ── -->
+    <div id="no_results" class="no-results" hidden>
+      <span class="no-results-icon">○</span>
+      No relevant documents found in the Outfox KB.
+    </div>
+
+    <!-- ── Answer + Sources ── -->
+    <section id="answer_section" class="card answer-card" hidden>
+
+      <div class="answer-header">
+        <h2 class="section-title">Answer</h2>
+      </div>
+
+      <div id="answer_content" class="answer-body"></div>
+
+      <div id="sources_section" class="sources-section" hidden>
+        <h3 class="sources-title">Sources</h3>
+        <ul id="sources_list" class="sources-list"></ul>
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

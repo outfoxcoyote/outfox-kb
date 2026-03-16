@@ -1,0 +1,11 @@
+{
+  "title": "Pipeline Test — Market Intelligence Excerpt",
+  "content": "# Outfox Market Intelligence: Queryable Knowledge Base Landscape\n\n## Business Model Context\n\nOutfox Consulting delivers done-for-you AI automation and knowledge base systems, primarily for real estate agents and small business owners. The core architecture is KB as hub, derivative tools as spokes — a private, queryable knowledge base is the central deliverable, with automation workflows, client-facing tools, and reporting layered on top.\n\n## Market Signal Summary\n\nThe X/builder community has converged on the same model Outfox is building toward: vertical AI employees that own repeatable business outputs using private knowledge bases. This is not speculative — it is actively being built and sold in 2025-2026.\n\nKey validated signals:\n- Real estate is explicitly named as a live, active buyer vertical — not a future one\n- SMBs now have dedicated AI budgets and executive mandates to purchase\n- The market is shifting from generic chatbots to narrow, high-value, embedded tools\n- Winners are defined by owning the finished artifact the customer cares about, not the underlying chat interface\n\n## Chunking: The #1 Build Quality Bottleneck\n\nBefore any document enters the knowledge base, it must be split into pieces called chunks. Each chunk is independently embedded and stored. Retrieval pulls back chunks, not whole documents.\n\nBad chunking breaks retrieval regardless of how good the embeddings or LLM are. It is the highest-leverage decision in any KB build.\n\nThe Outfox default is recursive plus document-aware chunking, with 10-15% overlap at chunk seams.",
+  "pdf_b64": null,
+  "doc_type": "market-intelligence",
+  "category": "Strategy",
+  "subcategory": "KB Architecture",
+  "industry": null,
+  "source": "outfox-kb-market-intelligence.md",
+  "is_distilled": false
+}

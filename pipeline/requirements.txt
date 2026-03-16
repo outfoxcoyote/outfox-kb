@@ -1,0 +1,6 @@
+openai
+httpx
+python-dotenv
+tiktoken
+pypdf
+pandas
